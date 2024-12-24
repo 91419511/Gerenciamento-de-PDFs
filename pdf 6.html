@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento de PDFs</title>
+    <style>
+        body, table, th, td, input, button {
+            font-family: "Times New Roman", Times, serif;
+            font-weight: bold; /* Negrito para todo o texto */
+        }
+        body {
+            width: 297mm;
+            height: 420mm;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 15px; /* Arredonda as bordas do layout */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: #e6e6e6; /* Branco Mais Escuro 20% */
+            background-image: var(--background-image);
+            background-size: cover;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+            border-radius: 10px; /* Arredonda as bordas das células */
+            background-color: #e6e6e6; /* Branco Mais Escuro 20% */
+            color: black;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px; /* Arredonda as bordas das entradas */
+            resize: both; /* Permite redimensionar */
+            overflow: auto;
+            background-color: #e6e6e6; /* Branco Mais Escuro 20% */
+            color: black;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 10px 5px; /* Espaçamento entre botões */
+            border-radius: 5px; /* Arredonda as bordas dos botões */
+        }
+        h1 {
+            font-family: "Times New Roman", Times, serif;
+            font-weight: bold;
+            color: black; /* Preto */
+        }
+        #pdfViewer {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+            display: none; /* Oculto inicialmente */
+            border-radius: 10px; /* Arredonda as bordas do visualizador */
+            background-color: #e6e6e6; /* Branco Mais Escuro 20% */
+            color: black;
+        }
+        #backgroundInput {
+            display: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+</head>
+<body>
+
+    <h1>Gerenciamento de PDFs</h1>
+
+    <button onclick="document.getElementById('fileInput').click()">Selecionar PDFs</button>
+    <input type="file" id="fileInput" multiple accept=".pdf" onchange="handleFiles(this.files)">
+    
+    <div>
+        <label for="baseName">Nome Base: </label>
+        <input type="text" id="baseName" placeholder="Insira o nome base">
+        <button onclick="aplicarNomesSequenciais()">Aplicar Nomes Sequenciais</button>
+        <button onclick="document.getElementById('backgroundInput').click()">Adicionar/Modificar Plano de Fundo</button>
+        <input type="file" id="backgroundInput" accept="image/*" onchange="changeBackground(this.files)">
+        <button onclick="salvarPDFs()">Salvar</button>
+    </div>
+
+    <table id="pdfTable">
+        <thead>
+            <tr>
+                <th class="nomeOriginalCol">Nome Original do PDF</th>
+                <th class="nomeNovoCol">Nome Novo do PDF</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- As linhas serão geradas dinamicamente -->
+        </tbody>
+    </table>
+
+    <div id="pdfViewer"></div>
+
+    <script>
+        function handleFiles(files) {
+            const tableBody = document.querySelector('#pdfTable tbody');
+            tableBody.innerHTML = ''; // Limpa o corpo da tabela
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                const row = document.createElement('tr');
+                
+                const cellOriginal = document.createElement('td');
+                cellOriginal.className = 'nomeOriginalCol';
+                cellOriginal.textContent = file.name;
+                row.appendChild(cellOriginal);
+
+                const cellNovo = document.createElement('td');
+                cellNovo.className = 'nomeNovoCol';
+                const inputNovo = document.createElement('input');
+                inputNovo.type = 'text';
+                inputNovo.placeholder = `Novo Nome ${i + 1}`;
+                inputNovo.className = 'newName';
+                cellNovo.appendChild(inputNovo);
+                row.appendChild(cellNovo);
+
+                // Adiciona evento para exibir o conteúdo do PDF ao clicar com o botão direito na coluna "Nome Original do PDF"
+                cellOriginal.addEventListener('contextmenu', (event) => {
+                    event.preventDefault();
+                    previewPDF(file);
+                });
+
+                tableBody.appendChild(row);
+            }
+        }
+
+        function previewPDF(file) {
+            const fileReader = new FileReader();
+            fileReader.onload = function() {
+                const typedArray = new Uint8Array(this.result);
+
+                pdfjsLib.getDocument(typedArray).promise.then(pdf => {
+                    pdf.getPage(1).then(page => {
+                        const scale = 1.5;
+                        const viewport = page.getViewport({ scale: scale });
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        const renderContext = {
+                            canvasContext: context,
+                            viewport: viewport
+                        };
+                        
+                        page.render(renderContext).promise.then(() => {
+                            const pdfViewer = document.getElementById('pdfViewer');
+                            pdfViewer.innerHTML = ''; // Limpa o visualizador
+                            pdfViewer.appendChild(canvas);
+                            pdfViewer.style.display = 'block'; // Exibe o painel de visualização
+                        });
+                    });
+                });
+            };
+            fileReader.readAsArrayBuffer(file);
+        }
+
+        function aplicarNomesSequenciais() {
+            const baseName = document.getElementById('baseName').value;
+            const newNameFields = document.querySelectorAll('.newName');
+
+            newNameFields.forEach((input, index) => {
+                input.value = `${baseName} ${String(index + 1).padStart(2, '0')}`;
+            });
+        }
+
+        function changeBackground(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const url = e.target.result;
+                    document.body.style.setProperty('--background-image', `url(${url})`);
+                    localStorage.setItem('backgroundImage', url);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function salvarPDFs() {
+            const tableRows = document.querySelectorAll('#pdfTable tbody tr');
+
+            tableRows.forEach(row => {
+                const originalName = row.cells[0].textContent;
+                const newName = row.cells[1].querySelector('input').value || originalName;
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(new Blob([originalName], { type: 'application/pdf' }));
+                link.download = newName;
+                link.click();
+                URL.revokeObjectURL(link.href);
+
+                console.log(`Renomear ${originalName} para ${newName}`);
+            });
+        }
+
+        // Carrega o plano de fundo salvo
+        window.onload = function() {
+            const savedBackground = localStorage.getItem('backgroundImage');
+            if (savedBackground) {
+                document.body.style.setProperty('--background-image', `url(${savedBackground})`);
+            }
+        };
+    </script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
